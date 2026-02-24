@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -293,10 +293,16 @@
                             'X-Title': 'Universal AI Chat' // Required by OpenRouter
                         },
                         body: JSON.stringify({
-                            model: modelName || 'google/gemini-2.5-flash',
-                            messages: apiMessages
-                        })
-                    });
+    model: modelName || 'google/gemini-2.5-flash',
+    messages: [
+        { 
+            role: "system", 
+            content: "You are a professional Hackathon assistant. Your knowledge is based on this dataset: [এখানে আপনার ডাটা পেস্ট করুন]" 
+        },
+        ...apiMessages
+    ]
+})
+                            
 
                     if (!response.ok) {
                         const errorData = await response.json();
