@@ -1,374 +1,453 @@
- <!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal AI Interface</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Custom scrollbar for a cleaner look */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
-        .spinner { animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Universal AI Chat (Zero-Build)</title>
+
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Marked for Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    /* Minimal custom tweaks */
+    :root{
+      --safe-bottom: env(safe-area-inset-bottom, 12px);
+    }
+    html,body,#app { min-height:100%; }
+    /* keep input visible above mobile keyboard: sticky + padding-bottom using safe-area-inset */
+    .composer-safe { padding-bottom: calc(var(--safe-bottom) + 8px); }
+    .scroll-area { -webkit-overflow-scrolling: touch; }
+    .msg-bubble { word-break: break-word; white-space: pre-wrap; }
+    .code-block pre { white-space: pre-wrap; overflow:auto; }
+    /* loader */
+    #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.95); z-index:60; font-weight:600; }
+    /* small scrollbar */
+    .thin-scroll::-webkit-scrollbar { height:8px; width:8px; }
+    .thin-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius:8px; }
+  </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans h-screen overflow-hidden flex">
+<body class="antialiased bg-slate-50 text-slate-800">
+  <!-- Fallback loader (must be visible until JS initializes) -->
+  <div id="loading">Loading App…</div>
 
-    <aside class="w-64 bg-gray-100 border-r border-gray-200 flex flex-col hidden md:flex z-10">
-        <div class="p-4">
-            <button id="newChatBtn" class="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                New Chat
-            </button>
-        </div>
-        
-        <div class="flex-1 overflow-y-auto p-3 space-y-1" id="chatHistoryList">
-            </div>
+  <div id="app" class="min-h-screen flex flex-col md:flex-row">
 
-        <div class="p-4 border-t border-gray-200">
-            <button id="openSettingsBtn" class="w-full flex items-center gap-2 text-gray-600 hover:text-gray-900 p-2 rounded-lg hover:bg-gray-200 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
-                Settings
-            </button>
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-full md:w-80 bg-white border-r border-slate-200 md:block hidden flex-shrink-0">
+      <div class="px-4 py-3 border-b flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-md bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center font-semibold">AI</div>
+          <div>
+            <div class="text-sm font-semibold">Universal AI</div>
+            <div class="text-xs text-slate-500">Static • Zero-build</div>
+          </div>
         </div>
+        <div class="flex items-center gap-2">
+          <button id="mobileCloseSidebar" class="md:hidden text-slate-600" title="Close sidebar">
+            ✕
+          </button>
+          <button id="newChatBtn" class="text-sm bg-indigo-600 text-white px-3 py-1 rounded-md">New</button>
+        </div>
+      </div>
+
+      <div class="px-3 py-2">
+        <input id="searchInput" placeholder="Search chats..." class="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none" />
+      </div>
+
+      <div class="px-3 py-2 flex items-center gap-2 border-b border-slate-100">
+        <button id="exportBtn" class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-md">Export</button>
+        <label for="importFile" class="text-xs bg-yellow-50 text-yellow-800 px-3 py-1 rounded-md cursor-pointer">Import</label>
+        <input id="importFile" type="file" accept="application/json" class="hidden" />
+        <button id="clearAllBtn" class="ml-auto text-xs text-red-600">Clear all</button>
+      </div>
+
+      <div id="chatsContainer" class="px-2 py-2 overflow-auto thin-scroll sidebar-scroll scroll-area" style="max-height:calc(100vh - 220px)"></div>
+
+      <div class="px-4 py-3 border-t text-xs text-slate-500">
+        <div>Model:</div>
+        <div id="modelDisplay" class="text-sm font-medium text-slate-700 truncate">deepseek/deepseek-r1:free</div>
+        <div class="mt-2 flex items-center gap-2">
+          <button id="settingsBtn" class="text-sm px-3 py-1 rounded-md bg-slate-100">Settings</button>
+          <button id="themeToggle" class="text-sm px-3 py-1 rounded-md bg-slate-100">Dark</button>
+        </div>
+      </div>
     </aside>
 
-    <main class="flex-1 flex flex-col relative w-full">
-        <header class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-10">
-            <div class="flex items-center gap-3">
-                <button id="mobileMenuBtn" class="md:hidden text-gray-500 hover:text-gray-800">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-                </button>
-                <h1 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                    Universal AI
-                    <span id="currentModelDisplay" class="text-xs font-normal bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">No Model Set</span>
-                </h1>
-            </div>
-        </header>
-
-        <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 pb-32">
-            <div id="welcomeScreen" class="h-full flex flex-col items-center justify-center text-center text-gray-500 hidden">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-16 h-16 mb-4 text-gray-300"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" /></svg>
-                <h2 class="text-xl font-medium text-gray-700">How can I help you today?</h2>
-                <p class="mt-2 text-sm">Please ensure your API key is set in Settings.</p>
-            </div>
+    <!-- Main area -->
+    <main class="flex-1 min-h-0 flex flex-col">
+      <!-- top bar (mobile) -->
+      <div class="px-3 py-2 bg-white border-b flex items-center justify-between md:hidden">
+        <div class="flex items-center gap-2">
+          <button id="hamburger" class="p-2 rounded-md bg-slate-100">☰</button>
+          <div class="text-sm font-semibold">Universal AI</div>
         </div>
+        <div class="text-xs text-slate-500">Mobile</div>
+      </div>
 
-        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent pt-6 pb-6 px-4 md:px-8">
-            <div class="max-w-4xl mx-auto relative flex items-end shadow-lg rounded-2xl bg-white border border-gray-200 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
-                <textarea id="messageInput" rows="1" class="w-full max-h-48 py-4 pl-4 pr-14 rounded-2xl bg-transparent border-none focus:ring-0 resize-none outline-none" placeholder="Message AI..."></textarea>
-                <button id="sendBtn" class="absolute right-3 bottom-3 p-1.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" /></svg>
-                </button>
-            </div>
-            <p class="text-center text-xs text-gray-400 mt-3">AI can make mistakes. Verify important info.</p>
+      <!-- chat header -->
+      <header class="px-4 py-3 flex items-center justify-between bg-white border-b">
+        <div>
+          <div id="chatTitle" class="text-lg font-semibold">Welcome</div>
+          <div id="chatMeta" class="text-xs text-slate-500">Start a new chat or select from left</div>
         </div>
+        <div class="flex items-center gap-3">
+          <button id="renameChatBtn" class="text-sm text-slate-600 hidden">Rename</button>
+          <button id="deleteChatBtn" class="text-sm text-red-600 hidden">Delete</button>
+        </div>
+      </header>
+
+      <!-- messages scroll area -->
+      <section id="messagesScroll" class="flex-1 overflow-auto scroll-area px-4 py-6 thin-scroll" style="background:linear-gradient(180deg,#fbfdff, #ffffff);">
+        <div id="messagesList" class="max-w-3xl mx-auto space-y-4"></div>
+      </section>
+
+      <!-- composer (sticky bottom) -->
+      <div class="bg-white border-t composer-safe" style="position:sticky; bottom:0; z-index:40;">
+        <div class="max-w-3xl mx-auto px-4 py-3">
+          <div class="flex items-start gap-2">
+            <textarea id="inputBox" rows="1" placeholder="Type a message (Enter to send, Shift+Enter for newline)" class="flex-1 resize-none rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none"></textarea>
+            <div class="flex flex-col gap-2">
+              <button id="sendBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-md">Send</button>
+              <button id="mockBtn" class="bg-slate-100 text-slate-700 px-3 py-2 rounded-md text-xs">Mock</button>
+            </div>
+          </div>
+          <div class="mt-2 text-xs text-slate-400">Press Enter to send • Messages stored locally</div>
+        </div>
+      </div>
     </main>
+  </div>
 
-    <div id="settingsModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 backdrop-blur-sm transition-opacity">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 transform transition-all">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-semibold text-gray-800">Settings</h2>
-                <button id="closeSettingsBtn" class="text-gray-400 hover:text-gray-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                </button>
-            </div>
-            
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">OpenRouter API Key</label>
-                    <input type="password" id="apiKeyInput" placeholder="sk-or-v1-..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Model Name</label>
-                    <input type="text" id="modelInput" placeholder="e.g. google/gemini-pro" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
-                    <p class="text-xs text-gray-500 mt-1">Default: google/gemini-2.5-flash</p>
-                </div>
-            </div>
-
-            <div class="mt-8 flex justify-end">
-                <button id="saveSettingsBtn" class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition-colors">Save Configurations</button>
-            </div>
+  <!-- Settings Modal -->
+  <div id="modal" class="fixed inset-0 hidden items-center justify-center z-50">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl z-10">
+      <div class="p-4 border-b flex items-center justify-between">
+        <div class="text-lg font-semibold">Settings</div>
+        <button id="closeModal" class="text-sm text-slate-600">Close</button>
+      </div>
+      <div class="p-4 space-y-4">
+        <div>
+          <label class="text-xs text-slate-500">OpenRouter API Key</label>
+          <input id="apiKey" type="password" placeholder="sk-..." class="w-full mt-1 rounded-md border border-slate-200 px-3 py-2" />
+          <div class="text-xs text-slate-400 mt-1">Stored locally in browser only.</div>
         </div>
+        <div>
+          <label class="text-xs text-slate-500">Model Name</label>
+          <input id="modelName" placeholder="deepseek/deepseek-r1:free" class="w-full mt-1 rounded-md border border-slate-200 px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Custom Endpoint (optional)</label>
+          <input id="customEndpoint" placeholder="https://openrouter.ai/api/v1/chat/completions" class="w-full mt-1 rounded-md border border-slate-200 px-3 py-2" />
+          <div class="text-xs text-slate-400 mt-1">Leave blank to use https://openrouter.ai/api/v1/chat/completions</div>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Global System Prompt (optional)</label>
+          <textarea id="globalSystem" rows="3" class="w-full mt-1 rounded-md border border-slate-200 px-3 py-2 text-sm"></textarea>
+          <div class="text-xs text-slate-400 mt-1">Applied when a chat has no per-chat system prompt.</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="saveSettings" class="bg-indigo-600 text-white px-4 py-2 rounded-md">Save</button>
+          <button id="clearSettings" class="text-sm text-red-600">Clear</button>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // --- State Management ---
-            let chats = JSON.parse(localStorage.getItem('ai_chats')) || [];
-            let currentChatId = localStorage.getItem('ai_current_chat') || null;
-            let apiKey = localStorage.getItem('ai_api_key') || '';
-            let modelName = localStorage.getItem('ai_model_name') || 'google/gemini-2.5-flash';
-            let isGenerating = false;
+  <!-- Templates -->
+  <template id="chatItemTpl">
+    <div class="chat-item flex items-center gap-3 p-3 rounded-md hover:bg-slate-50 cursor-pointer">
+      <div class="w-9 h-9 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-700 font-semibold">AI</div>
+      <div class="flex-1 min-w-0">
+        <div class="chat-title text-sm font-medium truncate">Chat title</div>
+        <div class="chat-snippet text-xs text-slate-400 truncate">Snippet</div>
+      </div>
+      <div class="text-xs text-slate-400 chat-time">time</div>
+    </div>
+  </template>
 
-            // --- DOM Elements ---
-            const els = {
-                chatHistoryList: document.getElementById('chatHistoryList'),
-                messagesContainer: document.getElementById('messagesContainer'),
-                welcomeScreen: document.getElementById('welcomeScreen'),
-                messageInput: document.getElementById('messageInput'),
-                sendBtn: document.getElementById('sendBtn'),
-                newChatBtn: document.getElementById('newChatBtn'),
-                openSettingsBtn: document.getElementById('openSettingsBtn'),
-                closeSettingsBtn: document.getElementById('closeSettingsBtn'),
-                saveSettingsBtn: document.getElementById('saveSettingsBtn'),
-                settingsModal: document.getElementById('settingsModal'),
-                apiKeyInput: document.getElementById('apiKeyInput'),
-                modelInput: document.getElementById('modelInput'),
-                currentModelDisplay: document.getElementById('currentModelDisplay'),
-                mobileMenuBtn: document.getElementById('mobileMenuBtn'),
-                sidebar: document.querySelector('aside')
-            };
+  <template id="userMsgTpl">
+    <div class="flex justify-end">
+      <div class="msg-bubble bg-indigo-600 text-white p-3 rounded-lg rounded-br-none max-w-[80%] shadow-sm">
+        <div class="msg-content prose text-sm user-content"></div>
+        <div class="text-xs mt-2 text-white/80 flex gap-2 justify-end">
+          <button class="copyBtn text-white/90">Copy</button>
+        </div>
+      </div>
+    </div>
+  </template>
 
-            // --- Initialization ---
-            function init() {
-                updateModelDisplay();
-                if (chats.length === 0 || !currentChatId) {
-                    createNewChat();
-                } else {
-                    renderSidebar();
-                    renderMessages();
-                }
-                
-                // Auto-resize textarea
-                els.messageInput.addEventListener('input', function() {
-                    this.style.height = 'auto';
-                    this.style.height = (this.scrollHeight) + 'px';
-                });
-            }
+  <template id="aiMsgTpl">
+    <div class="flex justify-start">
+      <div class="msg-bubble bg-white p-3 rounded-lg rounded-bl-none border border-slate-100 max-w-[80%] shadow-sm">
+        <div class="msg-content prose text-sm ai-content"></div>
+        <div class="text-xs mt-2 text-slate-400 flex gap-2 justify-end">
+          <button class="copyBtn">Copy</button>
+        </div>
+      </div>
+    </div>
+  </template>
 
-            // --- Core Functions ---
-            function updateModelDisplay() {
-                els.currentModelDisplay.textContent = modelName || 'google/gemini-2.5-flash';
-            }
+  <!-- Script MUST be at the VERY END of body -->
+  <script>
+  (function(){
+    'use strict';
+    /* ========= Defensive / Safe App Boot ========= */
 
-            function saveState() {
-                localStorage.setItem('ai_chats', JSON.stringify(chats));
-                localStorage.setItem('ai_current_chat', currentChatId);
-                localStorage.setItem('ai_api_key', apiKey);
-                localStorage.setItem('ai_model_name', modelName);
-                renderSidebar();
-            }
+    // Loading guard: ensure the loader is hidden only after init
+    const loader = document.getElementById('loading');
+    function hideLoader() { try { loader.style.display = 'none'; } catch(e){} }
 
-            function createNewChat() {
-                const newChat = {
-                    id: Date.now().toString(),
-                    title: 'New Conversation',
-                    messages: []
-                };
-                chats.unshift(newChat);
-                currentChatId = newChat.id;
-                saveState();
-                renderMessages();
-            }
+    // Storage keys
+    const KEYS = {
+      CHATS: 'uai_chats_v1',
+      SETTINGS: 'uai_settings_v1',
+      THEME: 'uai_theme_v1',
+      ACTIVE: 'uai_active_v1',
+    };
 
-            function getActiveChat() {
-                return chats.find(c => c.id === currentChatId);
-            }
+    // DOM refs
+    const chatsContainer = document.getElementById('chatsContainer');
+    const newChatBtn = document.getElementById('newChatBtn');
+    const searchInput = document.getElementById('searchInput');
+    const exportBtn = document.getElementById('exportBtn');
+    const importFile = document.getElementById('importFile');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const modal = document.getElementById('modal');
+    const closeModal = document.getElementById('closeModal');
+    const saveSettingsBtn = document.getElementById('saveSettings');
+    const clearSettingsBtn = document.getElementById('clearSettings');
+    const apiKeyInput = document.getElementById('apiKey');
+    const modelInput = document.getElementById('modelName');
+    const customEndpointInput = document.getElementById('customEndpoint');
+    const globalSystemInput = document.getElementById('globalSystem');
+    const modelDisplay = document.getElementById('modelDisplay');
+    const themeToggle = document.getElementById('themeToggle');
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const mobileCloseSidebar = document.getElementById('mobileCloseSidebar');
 
-            // --- UI Rendering ---
-            function renderSidebar() {
-                els.chatHistoryList.innerHTML = '';
-                chats.forEach(chat => {
-                    const btn = document.createElement('button');
-                    const isActive = chat.id === currentChatId;
-                    btn.className = `w-full text-left truncate px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-200'}`;
-                    btn.textContent = chat.title;
-                    btn.onclick = () => {
-                        currentChatId = chat.id;
-                        saveState();
-                        renderMessages();
-                        // Close sidebar on mobile
-                        if(window.innerWidth < 768) els.sidebar.classList.add('hidden');
-                    };
-                    els.chatHistoryList.appendChild(btn);
-                });
-            }
+    const chatTitle = document.getElementById('chatTitle');
+    const chatMeta = document.getElementById('chatMeta');
+    const renameChatBtn = document.getElementById('renameChatBtn');
+    const deleteChatBtn = document.getElementById('deleteChatBtn');
 
-            function renderMessages() {
-                const activeChat = getActiveChat();
-                
-                // Keep welcome screen logic
-                Array.from(els.messagesContainer.children).forEach(child => {
-                    if (child.id !== 'welcomeScreen') child.remove();
-                });
+    const messagesList = document.getElementById('messagesList');
+    const messagesScroll = document.getElementById('messagesScroll');
+    const inputBox = document.getElementById('inputBox');
+    const sendBtn = document.getElementById('sendBtn');
+    const mockBtn = document.getElementById('mockBtn');
 
-                if (!activeChat || activeChat.messages.length === 0) {
-                    els.welcomeScreen.classList.remove('hidden');
-                    els.welcomeScreen.classList.add('flex');
-                } else {
-                    els.welcomeScreen.classList.add('hidden');
-                    els.welcomeScreen.classList.remove('flex');
-                    
-                    activeChat.messages.forEach(msg => appendMessageUI(msg.role, msg.content));
-                }
-                scrollToBottom();
-            }
+    const chatItemTpl = document.getElementById('chatItemTpl');
+    const userMsgTpl = document.getElementById('userMsgTpl');
+    const aiMsgTpl = document.getElementById('aiMsgTpl');
 
-            function escapeHTML(str) {
-                return str.replace(/[&<>'"]/g, tag => ({
-                    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-                }[tag]));
-            }
+    // app state
+    let state = {
+      chats: [], // {id,title,createdAt,updatedAt,system, messages: [{role,content,ts}]}
+      settings: { apiKey:'', model:'deepseek/deepseek-r1:free', endpoint:'https://openrouter.ai/api/v1/chat/completions', globalSystem:'' },
+      activeId: null,
+      theme: 'light',
+      streamingController: null
+    };
 
-            function formatContent(content) {
-                // Basic formatting for line breaks to <br> tags
-                return escapeHTML(content).replace(/\n/g, '<br/>');
-            }
+    /* ---------- Utilities ---------- */
+    function uid(prefix='c'){ return prefix + '_' + Math.random().toString(36).slice(2,9); }
+    function nowISO(){ return new Date().toISOString(); }
+    function safeParseJSON(s, fallback){ try { return JSON.parse(s || 'null') || fallback; } catch(e){ return fallback; } }
+    function saveState(){
+      try {
+        localStorage.setItem(KEYS.CHATS, JSON.stringify(state.chats));
+        localStorage.setItem(KEYS.SETTINGS, JSON.stringify(state.settings));
+        localStorage.setItem(KEYS.ACTIVE, state.activeId || '');
+        localStorage.setItem(KEYS.THEME, state.theme);
+      } catch(e){
+        console.warn('Saving failed', e);
+      }
+    }
+    function loadState(){
+      try {
+        state.chats = safeParseJSON(localStorage.getItem(KEYS.CHATS), []);
+        state.settings = Object.assign(state.settings, safeParseJSON(localStorage.getItem(KEYS.SETTINGS), {}));
+        state.activeId = localStorage.getItem(KEYS.ACTIVE) || null;
+        state.theme = localStorage.getItem(KEYS.THEME) || state.theme;
+      } catch(e){
+        console.warn('Load failed', e);
+      }
+    }
 
-            function appendMessageUI(role, content) {
-                const msgDiv = document.createElement('div');
-                msgDiv.className = `flex gap-4 max-w-4xl mx-auto ${role === 'user' ? 'justify-end' : 'justify-start'}`;
-                
-                const innerDiv = document.createElement('div');
-                
-                if (role === 'user') {
-                    innerDiv.className = 'bg-blue-600 text-white px-5 py-3 rounded-2xl rounded-tr-sm max-w-[80%] whitespace-pre-wrap leading-relaxed shadow-sm';
-                    innerDiv.innerHTML = formatContent(content);
-                } else {
-                    innerDiv.className = 'bg-white border border-gray-200 text-gray-800 px-5 py-3 rounded-2xl rounded-tl-sm w-full leading-relaxed shadow-sm';
-                    innerDiv.innerHTML = formatContent(content);
-                }
+    /* ---------- Theme ---------- */
+    function applyTheme(){
+      if(state.theme === 'dark'){
+        document.documentElement.classList.add('dark');
+        document.body.classList.add('bg-slate-900','text-slate-100');
+        themeToggle.textContent = 'Light';
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.body.classList.remove('bg-slate-900','text-slate-100');
+        themeToggle.textContent = 'Dark';
+      }
+      localStorage.setItem(KEYS.THEME, state.theme);
+    }
+    themeToggle.addEventListener('click', () => {
+      state.theme = state.theme === 'dark' ? 'light' : 'dark';
+      applyTheme();
+      saveState();
+    });
 
-                msgDiv.appendChild(innerDiv);
-                els.messagesContainer.appendChild(msgDiv);
-                scrollToBottom();
-                return innerDiv;
-            }
+    /* ---------- Chat CRUD ---------- */
+    function createChat(title = 'New chat', opts = {}) {
+      const c = {
+        id: uid('chat'),
+        title: title || 'New chat',
+        createdAt: nowISO(),
+        updatedAt: nowISO(),
+        system: opts.system || null,
+        messages: opts.messages || []
+      };
+      state.chats.unshift(c);
+      state.activeId = c.id;
+      saveState();
+      renderSidebar();
+      renderActiveChat();
+      return c;
+    }
 
-            function scrollToBottom() {
-                els.messagesContainer.scrollTop = els.messagesContainer.scrollHeight;
-            }
+    function deleteChat(id){
+      const idx = state.chats.findIndex(c=>c.id===id);
+      if(idx === -1) return;
+      state.chats.splice(idx,1);
+      if(state.activeId === id) state.activeId = state.chats.length ? state.chats[0].id : null;
+      saveState();
+      renderSidebar();
+      renderActiveChat();
+    }
 
-            // --- API Interaction ---
-            async function handleSend() {
-                const text = els.messageInput.value.trim();
-                if (!text || isGenerating) return;
+    function renameChat(id, newTitle){
+      const c = state.chats.find(x=>x.id===id);
+      if(!c) return;
+      c.title = newTitle || c.title;
+      c.updatedAt = nowISO();
+      saveState();
+      renderSidebar();
+      renderActiveChat();
+    }
 
-                if (!apiKey) {
-                    alert('Please configure your OpenRouter API Key in Settings first.');
-                    els.settingsModal.classList.remove('hidden');
-                    els.settingsModal.classList.add('flex');
-                    return;
-                }
+    function addMessage(id, role, content){
+      const c = state.chats.find(x=>x.id===id);
+      if(!c) return;
+      c.messages.push({ role, content, ts: nowISO() });
+      c.updatedAt = nowISO();
+      saveState();
+    }
 
-                // UI Updates
-                els.messageInput.value = '';
-                els.messageInput.style.height = 'auto';
-                isGenerating = true;
-                els.sendBtn.disabled = true;
+    function setActive(id){
+      state.activeId = id;
+      localStorage.setItem(KEYS.ACTIVE, state.activeId || '');
+      renderSidebar();
+      renderActiveChat();
+    }
 
-                const activeChat = getActiveChat();
-                
-                // Auto-generate title for new chat
-                if (activeChat.messages.length === 0) {
-                    activeChat.title = text.substring(0, 30) + (text.length > 30 ? '...' : '');
-                    renderSidebar();
-                }
-
-                // Add User Message
-                activeChat.messages.push({ role: 'user', content: text });
-                appendMessageUI('user', text);
-                saveState();
-
-                // Setup Loading UI
-                const loadingDiv = document.createElement('div');
-                loadingDiv.className = 'flex gap-4 max-w-4xl mx-auto justify-start';
-                loadingDiv.innerHTML = `<div class="bg-white border border-gray-200 px-5 py-4 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-2 text-gray-500"><svg class="spinner w-5 h-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating response...</div>`;
-                els.messagesContainer.appendChild(loadingDiv);
-                scrollToBottom();
-
-                try {
-                    // Filter messages for API (OpenRouter expects standard role/content)
-                    const apiMessages = activeChat.messages.map(m => ({ role: m.role, content: m.content }));
-
-                    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${apiKey}`,
-                            'Content-Type': 'application/json',
-                            'HTTP-Referer': window.location.href, // Required by OpenRouter
-                            'X-Title': 'Universal AI Chat' // Required by OpenRouter
-                        },
-                        body: JSON.stringify({
-    model: modelName || 'google/gemini-2.5-flash',
-    messages: [
-        { 
-            role: "system", 
-            content: "You are a professional Hackathon assistant. Your knowledge is based on this dataset: [এখানে আপনার ডাটা পেস্ট করুন]" 
-        },
-        ...apiMessages
-    ]
-})
-                            
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    const aiContent = data.choices[0].message.content;
-
-                    loadingDiv.remove();
-                    activeChat.messages.push({ role: 'assistant', content: aiContent });
-                    appendMessageUI('assistant', aiContent);
-                    saveState();
-
-                } catch (error) {
-                    loadingDiv.remove();
-                    appendMessageUI('assistant', `⚠️ Error: ${error.message}`);
-                    console.error('API Error:', error);
-                } finally {
-                    isGenerating = false;
-                    els.sendBtn.disabled = false;
-                }
-            }
-
-            // --- Event Listeners ---
-            els.sendBtn.addEventListener('click', handleSend);
-            
-            els.messageInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                }
-            });
-
-            els.newChatBtn.addEventListener('click', createNewChat);
-
-            els.openSettingsBtn.addEventListener('click', () => {
-                els.apiKeyInput.value = apiKey;
-                els.modelInput.value = modelName;
-                els.settingsModal.classList.remove('hidden');
-                els.settingsModal.classList.add('flex');
-            });
-
-            els.closeSettingsBtn.addEventListener('click', () => {
-                els.settingsModal.classList.add('hidden');
-                els.settingsModal.classList.remove('flex');
-            });
-
-            els.saveSettingsBtn.addEventListener('click', () => {
-                apiKey = els.apiKeyInput.value.trim();
-                modelName = els.modelInput.value.trim() || 'google/gemini-2.5-flash';
-                saveState();
-                updateModelDisplay();
-                els.settingsModal.classList.add('hidden');
-                els.settingsModal.classList.remove('flex');
-            });
-
-            els.mobileMenuBtn.addEventListener('click', () => {
-                els.sidebar.classList.toggle('hidden');
-                els.sidebar.classList.toggle('absolute');
-                els.sidebar.classList.toggle('h-full');
-            });
-
-            // Initialize App
-            init();
+    /* ---------- Rendering Sidebar ---------- */
+    function renderSidebar(filter=''){
+      chatsContainer.innerHTML = '';
+      const filtered = state.chats.filter(c => {
+        if(!filter) return true;
+        return (c.title && c.title.toLowerCase().includes(filter)) ||
+               (c.messages && c.messages.some(m => m.content.toLowerCase().includes(filter)));
+      });
+      filtered.forEach(c => {
+        const node = chatItemTpl.content.cloneNode(true);
+        const item = node.querySelector('.chat-item');
+        item.dataset.id = c.id;
+        if(c.id === state.activeId) item.classList.add('bg-indigo-50');
+        node.querySelector('.chat-title').textContent = c.title || 'Chat';
+        const last = c.messages.length ? c.messages[c.messages.length-1] : null;
+        node.querySelector('.chat-snippet').textContent = last ? (last.content.slice(0,80).replace(/\n/g,' ')) : 'No messages yet';
+        node.querySelector('.chat-time').textContent = c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '';
+        item.addEventListener('click', ()=> setActive(c.id));
+        item.addEventListener('contextmenu', (ev)=>{
+          ev.preventDefault();
+          const action = confirm('Delete this chat? OK = delete, Cancel = rename');
+          if(action) deleteChat(c.id); else {
+            const newTitle = prompt('Rename chat', c.title);
+            if(newTitle) renameChat(c.id, newTitle);
+          }
         });
-    </script>
-</body>
-</html>
+        chatsContainer.appendChild(node);
+      });
+      if(filtered.length === 0){
+        const empty = document.createElement('div');
+        empty.className = 'p-4 text-sm text-slate-400';
+        empty.textContent = 'No chats yet. Click New.';
+        chatsContainer.appendChild(empty);
+      }
+      modelDisplay.textContent = state.settings.model || 'deepseek/deepseek-r1:free';
+    }
+
+    /* ---------- Render Active Chat ---------- */
+    function clearMessages(){
+      messagesList.innerHTML = '';
+    }
+
+    function renderActiveChat(){
+      clearMessages();
+      const chat = state.chats.find(c=>c.id===state.activeId);
+      if(!chat){
+        chatTitle.textContent = 'Welcome';
+        chatMeta.textContent = 'Start a new chat or create one from the left.';
+        renameChatBtn.classList.add('hidden');
+        deleteChatBtn.classList.add('hidden');
+        return;
+      }
+      chatTitle.textContent = chat.title || 'Chat';
+      chatMeta.textContent = `${chat.messages.length} messages • ${new Date(chat.updatedAt).toLocaleString()}`;
+      renameChatBtn.classList.remove('hidden');
+      deleteChatBtn.classList.remove('hidden');
+
+      chat.messages.forEach(m => {
+        appendMessageDom(m.role, m.content);
+      });
+      // scroll to bottom
+      setTimeout(()=> { try { messagesScroll.scrollTop = messagesScroll.scrollHeight; } catch(e){} }, 60);
+    }
+
+    /* ---------- Append message DOM ---------- */
+    function appendMessageDom(role, content){
+      const tpl = role === 'user' ? userMsgTpl : aiMsgTpl;
+      const node = tpl.content.cloneNode(true);
+      const wrapper = node.querySelector('.msg-bubble');
+      const contentEl = node.querySelector('.msg-content');
+      // render markdown safely if marked exists
+      try {
+        if(window.marked) {
+          contentEl.innerHTML = marked.parse(content || '');
+        } else {
+          contentEl.textContent = content;
+        }
+      } catch(e){
+        contentEl.textContent = content;
+      }
+      const copyBtn = node.querySelector('.copyBtn');
+      if(copyBtn){
+        copyBtn.addEventListener('click', ()=> {
+          try {
+            navigator.clipboard.writeText(content || '');
+            copyBtn.textContent = 'Copied';
+            setTimeout(()=> copyBtn.textContent = 'Copy', 1000);
+          } catch(e){ copyBtn.textContent = 'Err'; }
+        });
+      }
+      messagesList.appendChild(node);
+      // ensure visible
+      setTimeout(()=> { try { messagesScroll.scrollTop = messagesScroll.scrollHeight; } catch(e){} }, 20);
+    }
+
+    /* ---------- Typing & Streaming ---------- */
+    // We'll display AI streaming by appending to the last AI bubble's content incrementally.
+    function startStreamingPlaceholder(){
+      // create an AI bubble with empty content
+      const tpl = aiMsgTpl.content.cloneNode(true);
+     
